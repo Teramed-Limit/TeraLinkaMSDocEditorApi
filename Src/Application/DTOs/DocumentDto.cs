@@ -1,5 +1,6 @@
-namespace WordEditorApi.DTOs;
 using System.ComponentModel;
+
+namespace TeraLinkaMSDocEditorApi.Application.DTOs;
 
 public class CreateDocumentRequest
 {

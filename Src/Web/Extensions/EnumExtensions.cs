@@ -1,8 +1,6 @@
-using System;
 using System.ComponentModel;
-using System.Reflection;
 
-namespace WordEditorApi.Extensions
+namespace TeraLinkaMSDocEditorApi.Web.Extensions
 {
     public static class EnumExtensions
     {

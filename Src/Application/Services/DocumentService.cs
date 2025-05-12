@@ -1,12 +1,8 @@
 using System.Text.Json;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.AcroForms;
-using PdfSharpCore.Pdf.IO;
-using WordEditorApi.DTOs;
-using WordEditorApi.Utils;
+using TeraLinkaMSDocEditorApi.Application.Common.Utils;
+using TeraLinkaMSDocEditorApi.Application.DTOs;
 
-
-namespace WordEditorApi.Services;
+namespace TeraLinkaMSDocEditorApi.Application.Services;
 
 public interface IDocumentService
 {
@@ -94,14 +90,6 @@ public class DocumentService : IDocumentService
 
         var documentKey = DocumentUtils.GenerateDocumentKey(fileNameExt, id, lastModified, version);
 
-
-        FillForm(new Dictionary<string, string>
-        {
-            { "Text2", "預設值1" },
-            { "CheckBox1", "Yes" },
-            { "text2", "test" }
-        }, filePath);
-
         return new
         {
             Document = new
@@ -118,7 +106,7 @@ public class DocumentService : IDocumentService
                     Edit = mode == DocumentMode.Edit,
                     Review = mode == DocumentMode.Edit,
                     Comment = mode == DocumentMode.Edit,
-                    FillForms = mode == DocumentMode.FillForms
+                    // FillForms = mode == DocumentMode.FillForms
                 }
             },
             DocumentType = DocumentUtils.GetDocumentTypeByFileType(fileType),
@@ -133,7 +121,7 @@ public class DocumentService : IDocumentService
                 Customization = new
                 {
                     Forcesave = true,
-                    SubmitForm = mode == DocumentMode.FillForms,
+                    // SubmitForm = mode == DocumentMode.FillForms,
                 },
             }
         };
@@ -308,9 +296,9 @@ public class DocumentService : IDocumentService
     {
         try
         {
-            using var httpClient = new HttpClient();
-            var jsonString = await httpClient.GetStringAsync(formsDataUrl);
-            var formData = JsonDocument.Parse(jsonString);
+            // using var httpClient = new HttpClient();
+            // var jsonString = await httpClient.GetStringAsync(formsDataUrl);
+            // var formData = JsonDocument.Parse(jsonString);
 
             // foreach (var formField in formData.RootElement.EnumerateArray())
             // {
@@ -326,114 +314,6 @@ public class DocumentService : IDocumentService
         {
             _logger.LogError(ex, "處理表單數據時發生錯誤");
             throw;
-        }
-    }
-
-    private async Task ProcessFormField(string type, string key, string value, string tag)
-    {
-        switch (type?.ToLower())
-        {
-            case "text":
-                _logger.LogInformation($"處理文本表單: 鍵={key}, 值={value}");
-                break;
-            case "checkbox":
-                var isChecked = value?.ToLower() == "true";
-                _logger.LogInformation($"處理複選框: 鍵={key}, 已選中={isChecked}");
-                break;
-            case "picture":
-                if (!string.IsNullOrEmpty(value))
-                {
-                    _logger.LogInformation($"處理圖片: 鍵={key}");
-                }
-
-                break;
-            case "combobox":
-            case "dropdownlist":
-                _logger.LogInformation($"處理下拉列表: 鍵={key}, 選中值={value}");
-                break;
-            case "datetime":
-                if (DateTime.TryParse(value, out DateTime dateValue))
-                {
-                    _logger.LogInformation($"處理日期時間: 鍵={key}, 日期={dateValue:yyyy-MM-dd HH:mm:ss}");
-                }
-
-                break;
-            case "radio":
-                _logger.LogInformation($"處理單選按鈕組: 鍵={key}, 選中值={value}");
-                break;
-            default:
-                _logger.LogWarning($"未處理的表單類型: {type}, 鍵: {key}, 值: {value}");
-                break;
-        }
-
-        await LogFormSubmission(key, type, value, tag);
-    }
-
-    private async Task LogFormSubmission(string key, string type, string value, string tag)
-    {
-        var logMessage = new
-        {
-            Timestamp = DateTime.Now,
-            FormKey = key,
-            FormType = type,
-            FormValue = value,
-            FormTag = tag
-        };
-
-        var logJson = JsonSerializer.Serialize(logMessage);
-        _logger.LogInformation($"表單提交日誌: {logJson}");
-    }
-
-    private string FillForm(Dictionary<string, string> data, string templatePath)
-    {
-        // 檢查檔案是否存在
-        if (!File.Exists(templatePath))
-        {
-            throw new FileNotFoundException($"找不到範本檔案: {templatePath}");
-        }
-
-        using var inputDocument = PdfReader.Open(templatePath, PdfDocumentOpenMode.Modify);
-        if (inputDocument.AcroForm == null)
-            return templatePath;
-
-        inputDocument.AcroForm.Elements.SetBoolean("/NeedAppearances", true);
-        var form = inputDocument.AcroForm.Fields;
-
-        foreach (var item in form.Names)
-        {
-            Console.WriteLine($"欄位名稱: {item} ");
-        }
-
-        // 遍歷所有表單欄位並填寫
-        foreach (var field in data)
-        {
-            try
-            {
-                SetField(form, field.Key, field.Value);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"填寫欄位 {field.Key} 時發生錯誤: {ex.Message}");
-            }
-        }
-
-        // 取得檔案名稱和路徑
-        string fileName = Path.GetFileNameWithoutExtension(templatePath);
-        string directory = Path.GetDirectoryName(templatePath);
-        string newFileName = $"{fileName}_auto.pdf";
-        string newFilePath = Path.Combine(directory, newFileName);
-
-        // 儲存填寫後的PDF
-        inputDocument.Save(newFilePath);
-
-        return newFilePath;
-    }
-
-    private void SetField(PdfAcroField.PdfAcroFieldCollection fields, string name, string value)
-    {
-        if (fields[name] is PdfTextField textField)
-        {
-            textField.Value = new PdfString(value);
         }
     }
 }

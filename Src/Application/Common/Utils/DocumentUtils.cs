@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace WordEditorApi.Utils;
+namespace TeraLinkaMSDocEditorApi.Application.Common.Utils;
 
 public static class DocumentUtils
 {

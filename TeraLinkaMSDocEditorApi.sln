@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WordEditorApi", "WordEditorApi.csproj", "{3A28E310-8F29-4931-81C2-DE403476745D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TeraLinkaMSDocEditorApi", "TeraLinkaMSDocEditorApi.csproj", "{3A28E310-8F29-4931-81C2-DE403476745D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

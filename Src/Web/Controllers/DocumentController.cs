@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
-using WordEditorApi.DTOs;
-using WordEditorApi.Services;
+using TeraLinkaMSDocEditorApi.Application.DTOs;
+using TeraLinkaMSDocEditorApi.Application.Services;
 
-namespace WordEditorApi.Controller;
+namespace TeraLinkaMSDocEditorApi.Web.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
@@ -22,12 +22,12 @@ public class DocumentController : ControllerBase
         return Ok(documents);
     }
 
-    [HttpPost]
-    public async Task<IActionResult> CreateDocument([FromBody] CreateDocumentRequest request)
-    {
-        var document = await _documentService.CreateDocument(request);
-        return Ok(document);
-    }
+    // [HttpPost]
+    // public async Task<IActionResult> CreateDocument([FromBody] CreateDocumentRequest request)
+    // {
+    //     var document = await _documentService.CreateDocument(request);
+    //     return Ok(document);
+    // }
 
     [HttpGet("{id}")]
     public async Task<IActionResult> GetEditorConfig(string id, string fileType, string mode)
