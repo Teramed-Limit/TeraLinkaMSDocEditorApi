@@ -1,28 +1,50 @@
-# Getting Started with EF
+# TeraLinkaMSDocEditorApi
 
-## 安裝工具
+## 設定檔說明 (appsettings.json)
 
-#### dotnet ef 可以安裝為全域或本機工具。 大部分開發人員偏好使用下列命令安裝 dotnet ef 為全域工具：
+### 文檔相關設定
 
-`dotnet tool install --global dotnet-ef`
+- `DocStoragePath`: "D:\\WorkSpace\\Storage\\Doc"
 
-#### 使用下列命令更新工具：
+  - 用於存儲文檔的本地路徑
+  - 系統會將所有上傳的文檔存儲在此路徑下
 
-`dotnet tool update --global dotnet-ef`
+- `DocStorageUrl`: "http://192.168.50.131:860/doc"
 
-#### 確認安裝
+  - 文檔的 HTTP 訪問 URL
+  - 用於外部系統訪問存儲的文檔
 
-`dotnet ef`
+- `SelfHostedUrl`: "http://localhost:5292/api"
+  - API 的自託管 URL
+  - 用於配置 API 的訪問地址
 
-## 建立 Table
+### 系統設定
 
-### dotnet ef dbcontext scaffold
+- `Language`: "zh-TW"
+  - 系統使用的語言設定
+  - 目前設定為繁體中文
 
-#### 為 資料庫產生 和 實體類型的程式碼 DbContext 。 為了讓此命令產生實體類型，資料庫資料表必須有主鍵。
+### 安全設定
 
-`dotnet ef dbcontext scaffold "Server=DESKTOP-DSL3QH8\MSSQLSERVER01;Database=Doc;Trusted_Connection=True;TrustServerCertificate=True;" Microsoft.EntityFrameworkCore.SqlServer --context CRSDbContext --context-dir src/Infrastructure/Persistence --output-dir src/Core/Domain/Entities --use-database-names --force`
+- `AllowedOrigins`: 允許跨域請求的來源列表
 
-## 參考
+  ```json
+  [
+    "http://localhost:5173",
+    "https://localhost:5173",
+    "http://localhost:5174",
+    "https://localhost:5174",
+    "http://localhost:8080",
+    "https://localhost:8080",
+    "http://localhost:3001",
+    "http://localhost:3000"
+  ]
+  ```
 
-See the [Link](https://docs.microsoft.com/zh-tw/ef/core/cli/dotnet) for more information.
-See the [Entity framework tutorial](https://www.entityframeworktutorial.net/code-first/setup-entity-framework-code-first-environment.aspx) for more information.
+  - 用於 CORS（跨源資源共享）安全設定
+  - 只有列表中的網址可以訪問 API
+
+- `JWTSecret`
+  - JWT（JSON Web Token）認證使用的密鑰
+  - 用於生成和驗證 JWT 令牌的安全密鑰
+  - 建議在生產環境中使用強密鑰並妥善保管

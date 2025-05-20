@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TeraLinkaMSDocEditorApi.Application.DTOs;
 using TeraLinkaMSDocEditorApi.Application.Services;
+using TeraLinkaMSDocEditorApi.Web.Extensions;
 
 namespace TeraLinkaMSDocEditorApi.Web.Controllers;
 
@@ -8,41 +10,92 @@ namespace TeraLinkaMSDocEditorApi.Web.Controllers;
 [ApiController]
 public class DocumentController : ControllerBase
 {
-    private readonly IDocumentService _documentService;
+    private readonly DocumentService _documentService;
 
-    public DocumentController(IDocumentService documentService)
+    public DocumentController(DocumentService documentService)
     {
         _documentService = documentService;
     }
 
     [HttpGet]
-    public IActionResult GetDocuments()
+    public async Task<ActionResult<IEnumerable<DocumentDto>>> GetDocuments()
     {
-        var documents = _documentService.GetDocuments();
-        return Ok(documents);
+        try
+        {
+            var documents = await _documentService.GetDocuments();
+            return Ok(documents);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = true, message = "獲取文檔列表時發生錯誤" });
+        }
     }
 
-    // [HttpPost]
-    // public async Task<IActionResult> CreateDocument([FromBody] CreateDocumentRequest request)
-    // {
-    //     var document = await _documentService.CreateDocument(request);
-    //     return Ok(document);
-    // }
+    [HttpGet("templates")]
+    public async Task<ActionResult<IEnumerable<DocumentDto>>> GetDocumentTemplates()
+    {
+        try
+        {
+            var documents = await _documentService.GetDocuments();
+            return Ok(documents.Where(x => x.IsTemplate == true));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = true, message = "獲取文檔列表時發生錯誤" });
+        }
+    }
 
+    [Authorize]
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetEditorConfig(string id, string fileType, string mode)
+    public async Task<IActionResult> GetEditorConfig(
+        string id,
+        string mode,
+        string? templateId = null,
+        string? fileName = null,
+        bool? forceSwitchTemplate = false)
     {
         try
         {
             if (!Enum.TryParse<DocumentMode>(mode, true, out var documentMode))
                 return BadRequest($"無效的mode參數: {mode}");
 
-            var config = await _documentService.GetEditorConfig(id, fileType, documentMode);
+            var userId = User.Identity?.Name;
+
+            object config;
+            var document = await _documentService.GetDocument(id);
+            if (forceSwitchTemplate == true || document == null && !string.IsNullOrEmpty(templateId))
+            {
+                var newDocId = await _documentService.CreateDocumentFromTemplate(id, fileName, templateId);
+                config = await _documentService.GetEditorConfig(id, DocumentMode.Edit, userId ?? string.Empty);
+            }
+            else
+            {
+                config = await _documentService.GetEditorConfig(id, documentMode, userId ?? string.Empty);
+            }
+
             return Ok(config);
         }
         catch (FileNotFoundException)
         {
             return NotFound();
+        }
+    }
+
+    [HttpPost("{id}/rename/{fileName}")]
+    public async Task<IActionResult> RenameFile(string id, string fileName)
+    {
+        try
+        {
+            await _documentService.RenameFile(id, fileName);
+            return Ok(new { error = 0 });
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound(new { error = 1, message = "找不到指定的文檔" });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = 1, message = "處理回調時發生內部錯誤" });
         }
     }
 
@@ -61,6 +114,24 @@ public class DocumentController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { error = 1, message = "處理回調時發生內部錯誤" });
+        }
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteDocument(string id)
+    {
+        try
+        {
+            await _documentService.DeleteDocument(id);
+            return Ok(new { error = 0 });
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound(new { error = 1, message = "找不到指定的文檔" });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = 1, message = "處理時發生內部錯誤" });
         }
     }
 }

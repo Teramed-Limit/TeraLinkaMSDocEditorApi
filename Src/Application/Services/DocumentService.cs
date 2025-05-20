@@ -1,103 +1,144 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using TeraLinkaMSDocEditorApi.Application.Common.Utils;
 using TeraLinkaMSDocEditorApi.Application.DTOs;
+using TeraLinkaMSDocEditorApi.Domain.Entities;
+using TeraLinkaMSDocEditorApi.Infrastructure.Persistence;
+using TeraLinkaMSDocEditorApi.Web.Hubs;
 
 namespace TeraLinkaMSDocEditorApi.Application.Services;
 
-public interface IDocumentService
-{
-    List<DocumentResponse> GetDocuments();
-    Task<DocumentResponse> CreateDocument(CreateDocumentRequest request);
-    Task<object> GetEditorConfig(string id, string fileType, DocumentMode mode);
-    Task ProcessCallback(string id, Stream requestBody);
-}
-
-public class DocumentService : IDocumentService
+public class DocumentService
 {
     private readonly string _storagePath;
-    private readonly string _serverUrl;
+    private readonly string _docHttpUrl;
+    private readonly string _selfHostedUrl;
+    private readonly string _language;
     private readonly ILogger<DocumentService> _logger;
+    private readonly IHubContext<DocumentHub> _hubContext;
+    private readonly ApplicationDbContext _context;
 
-    public DocumentService(IConfiguration configuration, ILogger<DocumentService> logger)
+    public DocumentService(
+        IConfiguration configuration,
+        ILogger<DocumentService> logger,
+        IHubContext<DocumentHub> hubContext,
+        ApplicationDbContext context)
     {
         _storagePath = configuration.GetSection("DocStoragePath").Value;
-        _serverUrl = configuration.GetSection("DocStorageUrl").Value;
+        _docHttpUrl = configuration.GetSection("DocStorageUrl").Value;
+        _selfHostedUrl = configuration.GetSection("SelfHostedUrl").Value;
+        _language = configuration.GetSection("Language").Value;
         _logger = logger;
+        _hubContext = hubContext;
+        _context = context;
 
         if (!Directory.Exists(_storagePath))
             Directory.CreateDirectory(_storagePath);
     }
 
-    public List<DocumentResponse> GetDocuments()
+    public async Task<List<Document>> GetDocuments()
     {
-        return Directory.GetFiles(_storagePath)
-            .Select(f =>
-            {
-                var fileInfo = new FileInfo(f);
-                return new DocumentResponse
-                {
-                    Id = Path.GetFileNameWithoutExtension(f),
-                    FileName = Path.GetFileName(f),
-                    FileType = Path.GetExtension(f).TrimStart('.'),
-                    Url = $"{_serverUrl}/{Path.GetFileName(f)}",
-                    CreatedAt = fileInfo.CreationTime.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    UpdatedAt = fileInfo.LastWriteTime.ToString("yyyy-MM-ddTHH:mm:ss")
-                };
-            }).ToList();
+        var documents = await _context.Documents.ToListAsync();
+
+        return documents;
     }
 
-    public async Task<DocumentResponse> CreateDocument(CreateDocumentRequest request)
+    public async Task<Document?> GetDocument(string id)
     {
-        var newId = Guid.NewGuid().ToString();
-        var fileName = string.IsNullOrEmpty(request?.Title)
-            ? $"{newId}.docx"
-            : $"{newId}_{DocumentUtils.NormalizeFileName(request.Title)}.docx";
+        var documents = await _context.Documents
+            .FirstOrDefaultAsync((x) => x.Id.ToString() == id);
 
-        var filePath = Path.Combine(_storagePath, fileName);
-        System.IO.File.Copy("Empty.docx", filePath);
+        return documents;
+    }
 
-        var documentKey = DocumentUtils.GenerateSimpleDocumentKey(fileName);
-        var fileUrl = $"{_serverUrl}/{fileName}";
+    public async Task<bool> DeleteDocument(string id)
+    {
+        var document = await _context.Documents
+            .FirstOrDefaultAsync(x => x.Id.ToString() == id);
 
-        return new DocumentResponse
+        if (document == null)
+            return false;
+
+        _context.Documents.Remove(document);
+        await _context.SaveChangesAsync();
+
+        return true;
+    }
+
+
+    private async Task<Document> UpsertDocument(string id, string fileName)
+    {
+        var document = await GetDocument(id);
+        var docFileName = string.IsNullOrEmpty(fileName) ? id : fileName;
+
+        if (document == null)
         {
-            Id = newId,
-            FileName = fileName,
-            FileType = "docx",
-            Url = fileUrl,
-            CreatedAt = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"),
-            UpdatedAt = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss")
-        };
+            document = new Document
+            {
+                Id = id,
+                FilePath = Path.Combine(_storagePath, docFileName + ".docx"),
+                FileName = docFileName + ".docx",
+                FileType = "docx",
+                CreatedBy = "",
+                CreatedAt = DateTime.UtcNow,
+                LastModifiedBy = "",
+                LastModifiedAt = DateTime.UtcNow,
+                // isTemplate = isTemplate
+            };
+            await _context.Documents.AddAsync(document);
+        }
+        else
+        {
+            document.LastModifiedAt = DateTime.UtcNow;
+            document.LastModifiedBy = "";
+            _context.Documents.Update(document);
+        }
+
+        await _context.SaveChangesAsync();
+        return document;
     }
 
-    public async Task<object> GetEditorConfig(string id, string fileType, DocumentMode mode)
+    public async Task<Document> RenameFile(string id, string newFileName)
     {
-        var files = Directory.GetFiles(_storagePath)
-            .Where(f => Path.GetFileNameWithoutExtension(f).StartsWith(id))
-            .ToList();
-
-        if (!files.Any())
+        var document = await GetDocument(id);
+        if (document == null)
             throw new FileNotFoundException($"找不到ID為 {id} 的文檔");
 
-        var filePath = files.First();
-        var fileNameExt = Path.GetFileName(filePath);
-        var fileName = Path.GetFileNameWithoutExtension(filePath);
-        var fileUrl = $"{_serverUrl}/{fileNameExt}";
+        var newFileNameWithExt = newFileName + "." + document.FileType;
+        document.FilePath = Path.Combine(_storagePath, newFileNameWithExt);
+        document.FileName = newFileNameWithExt;
+        _context.Documents.Update(document);
+        await _context.SaveChangesAsync();
+        return document;
+    }
 
-        var fileInfo = new FileInfo(filePath);
-        var lastModified = fileInfo.LastWriteTime;
-        var version = 1;
+    public async Task<object> GetEditorConfig(string id, DocumentMode mode, string userId)
+    {
+        var document = await GetDocument(id);
 
-        var documentKey = DocumentUtils.GenerateDocumentKey(fileNameExt, id, lastModified, version);
+        if (document == null)
+            throw new FileNotFoundException($"找不到ID為 {id} 的文檔");
+
+        var filePath = document.FilePath;
+        var fileNameExt = document.FileType;
+        var fileName = document.FileName;
+        var fileHttpUrl = Path.Combine(_docHttpUrl, fileName);
+
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException($"找不到文檔");
+
+        var documentKey = DocumentUtils.GenerateDocumentKey(fileName, id);
 
         return new
         {
             Document = new
             {
-                FileType = fileType,
+                DocId = document.Id,
+                FileType = fileNameExt,
                 Key = documentKey,
-                Title = fileNameExt,
-                Url = fileUrl,
+                Title = fileName,
+                Url = fileHttpUrl,
                 Permissions = new
                 {
                     Download = true,
@@ -105,49 +146,66 @@ public class DocumentService : IDocumentService
                     Copy = true,
                     Edit = mode == DocumentMode.Edit,
                     Review = mode == DocumentMode.Edit,
-                    Comment = mode == DocumentMode.Edit,
-                    // FillForms = mode == DocumentMode.FillForms
+                    Comment = mode == DocumentMode.Edit
                 }
             },
-            DocumentType = DocumentUtils.GetDocumentTypeByFileType(fileType),
+            DocumentType = DocumentUtils.GetDocumentTypeByFileType(fileNameExt),
             Type = "desktop",
             EditorConfig = new
             {
-                CallbackUrl = $"http://localhost:5292/api/Document/{fileName}/callback",
+                CallbackUrl = $"{_selfHostedUrl}/Document/{id}/callback",
                 Mode = "edit",
-                Lang = "zh-TW",
-                Region = "zh-TW",
-                User = new User { Id = "userId", Name = "userName" },
-                Customization = new
-                {
-                    Forcesave = true,
-                    // SubmitForm = mode == DocumentMode.FillForms,
-                },
+                Lang = _language,
+                Region = _language,
+                User = new { Id = userId, Name = userId },
+                Customization = new { Forcesave = true, },
+                CoEditing = new { Mode = "Strict" },
             }
         };
     }
 
     public async Task ProcessCallback(string id, Stream requestBody)
     {
-        using var reader = new StreamReader(requestBody);
-        var body = await reader.ReadToEndAsync();
-        var callbackJson = JsonDocument.Parse(body);
-        var root = callbackJson.RootElement;
+        try
+        {
+            using var reader = new StreamReader(requestBody);
+            var body = await reader.ReadToEndAsync();
+            var callbackJson = JsonDocument.Parse(body);
+            var root = callbackJson.RootElement;
 
-        var docKey = root.GetProperty("key").GetString();
-        var status = root.GetProperty("status").GetInt32();
+            var docKey = root.GetProperty("key").GetString();
+            var status = root.GetProperty("status").GetInt32();
 
-        var files = Directory.GetFiles(_storagePath)
-            .Where(f => Path.GetFileNameWithoutExtension(f).StartsWith(id))
-            .ToList();
 
-        if (!files.Any())
-            throw new FileNotFoundException($"找不到ID為 {id} 的文檔");
+            var doc = await GetDocument(id);
+            if (doc == null)
+            {
+                _logger.LogError($"找不到ID為 {id} 的文檔");
+                throw new FileNotFoundException($"找不到ID為 {id} 的文檔");
+            }
 
-        var filePath = files.First();
-        var fileName = Path.GetFileName(filePath);
+            if (!File.Exists(doc.FilePath))
+            {
+                _logger.LogError($"文檔 {id} 的文件不存在: {doc.FileName}");
+                throw new FileNotFoundException($"文檔 {id} 的文件不存在: {doc.FileName}");
+            }
 
-        await ProcessCallbackStatus(status, root, filePath, fileName);
+            if (status == 6)
+                await _hubContext.Clients.All.SendAsync("ReceiveSaveStatus", id, "saving");
+
+            await ProcessCallbackStatus(status, root, doc.FilePath, doc.FileName);
+
+            await UpsertDocument(id, doc.FileName);
+
+            // 儲存成功後發送通知
+            if (status == 6)
+                await _hubContext.Clients.All.SendAsync("ReceiveSaveStatus", id, "saved");
+        }
+        catch (Exception ex)
+        {
+            await _hubContext.Clients.All.SendAsync("ReceiveSaveStatus", id, "error");
+            throw;
+        }
     }
 
     private async Task ProcessCallbackStatus(int status, JsonElement root, string filePath, string fileName)
@@ -292,11 +350,22 @@ public class DocumentService : IDocumentService
         }
     }
 
+    public async Task<string> CreateDocumentFromTemplate(string newDocId, string? fileName, string templateId)
+    {
+        var templateDoc = await GetDocument(templateId);
+        if (templateDoc == null)
+            throw new FileNotFoundException($"找不到模板文檔: {templateId}");
+
+        var newDoc = await UpsertDocument(newDocId, fileName);
+        File.Copy(templateDoc.FilePath, Path.Combine(_storagePath, newDoc.FilePath), true);
+        return newDocId;
+    }
+
     private async Task ProcessFormData(string formsDataUrl)
     {
         try
         {
-            // using var httpClient = new HttpClient();
+            // using var httpClient = new HttpClient();D
             // var jsonString = await httpClient.GetStringAsync(formsDataUrl);
             // var formData = JsonDocument.Parse(jsonString);
 

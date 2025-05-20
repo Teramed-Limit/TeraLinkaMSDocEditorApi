@@ -5,10 +5,10 @@ namespace TeraLinkaMSDocEditorApi.Application.Common.Utils;
 
 public static class DocumentUtils
 {
-    public static string GenerateDocumentKey(string fileName, string id, DateTime lastModified, int version = 1)
+    public static string GenerateDocumentKey(string fileName, string id)
     {
         var dateTimeFormat = DateTime.Now.ToString("yyyyMMddHHmmss");
-        string keySource = $"{id}_{lastModified:yyyyMMddHHmmss}_{dateTimeFormat}_{version}_{fileName}";
+        string keySource = $"{id}_{dateTimeFormat}_{fileName}";
         using var sha256 = SHA256.Create();
         var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(keySource));
         return BitConverter.ToString(hash).Replace("-", "").ToLower().Substring(0, 40);

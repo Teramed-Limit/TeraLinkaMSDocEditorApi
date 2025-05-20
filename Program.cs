@@ -1,10 +1,15 @@
+using System.Text;
 using AutoMapper;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using TeraLinkaMSDocEditorApi.Application.Services;
+using TeraLinkaMSDocEditorApi.Infrastructure.Authentication;
 using TeraLinkaMSDocEditorApi.Infrastructure.Mappings;
 using TeraLinkaMSDocEditorApi.Infrastructure.Persistence;
+using TeraLinkaMSDocEditorApi.Web.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,7 +17,10 @@ var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
 
 // Add services to the container.
-builder.Services.AddScoped<IDocumentService, DocumentService>();
+builder.Services.AddScoped<DocumentService>();
+
+// 添加SignalR服務
+builder.Services.AddSignalR();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -82,6 +90,50 @@ builder.Services.AddCors(options =>
     );
 });
 
+// 配置 JWT 認證
+var useJwtAuth = configuration.GetValue<bool>("UseJwtAuth", false);
+
+// 添加認證服務
+var auth = builder.Services.AddAuthentication(options =>
+{
+    if (useJwtAuth)
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    }
+    else
+    {
+        options.DefaultAuthenticateScheme = "NoAuth";
+        options.DefaultChallengeScheme = "NoAuth";
+    }
+});
+
+if (useJwtAuth)
+{
+    auth.AddJwtBearer(options =>
+    {
+        var secret = configuration.GetSection("JWTSecret").Get<string>();
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = "teramed",
+            ValidateAudience = true,
+            ValidAudience = "teramed",
+            ValidateLifetime = true,
+            RequireExpirationTime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret))
+        };
+    });
+}
+else
+{
+    builder.Services.AddAuthentication(options =>
+    {
+        options.AddScheme<AllowAllAuthenticationHandler>("NoAuth", "No Authentication");
+    });
+}
+
 // 配置 DbContext
 var connectionString = configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -121,8 +173,6 @@ app.UseSpaStaticFiles();
 
 app.UseRouting();
 
-// app.UseHttpsRedirection();
-
 // 使用 CORS
 app.UseCors("AllowAll");
 
@@ -130,11 +180,15 @@ app.UseCors("AllowAll");
 if (app.Environment.IsDevelopment())
     app.UseSerilogRequestLogging();
 
-// 添加認證中間件
-// app.UseAuthentication();
-// app.UseAuthorization();
+// 添加認證中間件（無論是否使用 JWT 都需要）
+app.UseAuthentication();
+app.UseAuthorization();
 
-app.MapControllers();
+app.UseEndpoints(endpoints =>
+{
+    endpoints.MapControllers();
+    endpoints.MapHub<DocumentHub>("/documentHub");
+});
 
 app.UseSpa(spa => { spa.Options.SourcePath = "ClientApp"; });
 

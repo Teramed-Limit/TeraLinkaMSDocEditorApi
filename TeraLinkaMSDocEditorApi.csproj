@@ -18,7 +18,7 @@
         <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
         <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.9.0" />
 		<PackageReference Include="AutoMapper" Version="13.0.1" />
-		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.12" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.2" />
 		<PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="8.0.12" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.12" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.12" />
@@ -35,26 +35,24 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Folder Include="Src\Domain\Entities"/>
-        <Folder Include="Src\Domain\Interfaces"/>
-        <Folder Include="Src\Domain\ValueObjects"/>
-        <Folder Include="Src\Domain\Enums"/>
-        <Folder Include="Src\Domain\Exceptions"/>
-        <Folder Include="Src\Application\Interfaces"/>
-        <Folder Include="Src\Application\Services"/>
-        <Folder Include="Src\Application\DTOs"/>
-        <Folder Include="Src\Application\Mappings"/>
-        <Folder Include="Src\Application\Common"/>
-        <Folder Include="Src\Application\Behaviors"/>
-        <Folder Include="Src\Infrastructure\Persistence"/>
-        <Folder Include="Src\Infrastructure\ExternalServices"/>
-        <Folder Include="Src\Infrastructure\Logging"/>
-        <Folder Include="Src\Infrastructure\Authentication"/>
-        <Folder Include="Src\Infrastructure\Configurations"/>
-        <Folder Include="Src\Web\Controllers"/>
-        <Folder Include="Src\Web\Middleware"/>
-        <Folder Include="Src\Web\Filters"/>
-        <Folder Include="Src\Web\Extensions"/>
+        <Folder Include="Src\Domain\Interfaces" />
+        <Folder Include="Src\Domain\ValueObjects" />
+        <Folder Include="Src\Domain\Enums" />
+        <Folder Include="Src\Domain\Exceptions" />
+        <Folder Include="Src\Application\Interfaces" />
+        <Folder Include="Src\Application\Services" />
+        <Folder Include="Src\Application\DTOs" />
+        <Folder Include="Src\Application\Mappings" />
+        <Folder Include="Src\Application\Common" />
+        <Folder Include="Src\Application\Behaviors" />
+        <Folder Include="Src\Infrastructure\Persistence" />
+        <Folder Include="Src\Infrastructure\ExternalServices" />
+        <Folder Include="Src\Infrastructure\Logging" />
+        <Folder Include="Src\Infrastructure\Authentication" />
+        <Folder Include="Src\Infrastructure\Configurations" />
+        <Folder Include="Src\Web\Middleware" />
+        <Folder Include="Src\Web\Filters" />
+        <Folder Include="Src\Web\Extensions" />
     </ItemGroup>
 
 </Project>
