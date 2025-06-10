@@ -15,6 +15,7 @@ public class DocumentService
     private readonly string _docHttpUrl;
     private readonly string _selfHostedUrl;
     private readonly string _language;
+    private readonly string _onlyDocJWTSecret;
     private readonly ILogger<DocumentService> _logger;
     private readonly IHubContext<DocumentHub> _hubContext;
     private readonly ApplicationDbContext _context;
@@ -28,6 +29,7 @@ public class DocumentService
         _storagePath = configuration.GetSection("DocStoragePath").Value;
         _docHttpUrl = configuration.GetSection("DocStorageUrl").Value;
         _selfHostedUrl = configuration.GetSection("SelfHostedUrl").Value;
+        _onlyDocJWTSecret = configuration.GetSection("OnlyDocJWTSecret").Value;
         _language = configuration.GetSection("Language").Value;
         _logger = logger;
         _hubContext = hubContext;
@@ -130,7 +132,7 @@ public class DocumentService
 
         var documentKey = DocumentUtils.GenerateDocumentKey(fileName, id);
 
-        return new
+        var documentConfig = new
         {
             Document = new
             {
@@ -160,7 +162,17 @@ public class DocumentService
                 User = new { Id = userId, Name = userId },
                 Customization = new { Forcesave = true, },
                 CoEditing = new { Mode = "Strict" },
-            }
+            },
+        };
+        
+        
+        return new
+        {
+            Document = documentConfig.Document,
+            DocumentType = documentConfig.DocumentType,
+            Type = documentConfig.Type,
+            EditorConfig = documentConfig.EditorConfig,
+            Token = JwtUtils.GenerateToken(documentConfig, _onlyDocJWTSecret)
         };
     }
 
